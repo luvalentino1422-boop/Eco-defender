@@ -9,31 +9,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 from informe import generar_matriz_informe
 matriz = generar_matriz_informe()
 print(matriz)
-
-import os
-from openai import OpenAI
-
-# Inicializa el cliente con la API de Poe
-client = OpenAI(
-    api_key=os.getenv("POE_API_KEY"),
-    base_url="https://poe.com/General_defenders",
-)
-
-def obtener_respuesta_poe(mensaje):
-    """
-    Envía un mensaje a Poe y devuelve la respuesta del modelo.
-    """
-    try:
-        response = client.chat.completions.create(
-            model="General_defenders",  # o el modelo que uses
-            messages=[{"role": "user", "content": mensaje}],
-        )
-        return response.choices[0].message["content"]
-    except Exception as e:
-        print("Error al comunicarse con Poe:", e)
-        return "Hubo un error al contactar con la IA."
-
-
 # ---------------------------
 # Configuración para guardar impactos en archivo TXT
 # ---------------------------
@@ -60,7 +35,7 @@ def pedir_usuario():
     screen = pygame.display.set_mode((ANCHO, ALTO))
     pygame.display.set_caption("Ingrese su nombre")
     font = pygame.font.Font(None, 36)
-    font_label = pygame.font.Font(None, 28)  # Fuente para el mensaje guía
+    font_label = pygame.font.Font(None, 28)  
 
     usuario = ""
     input_rect = pygame.Rect(300, 200, 200, 40)
@@ -68,8 +43,18 @@ def pedir_usuario():
     color_active = (255, 255, 255)
     color = color_inactive
     active = False
+    cursor_visible = True
+    cursor_counter = 0
+
+    clock = pygame.time.Clock()
 
     while True:
+        clock.tick(60)
+        cursor_counter += 1
+        if cursor_counter >= 30:
+            cursor_visible = not cursor_visible
+            cursor_counter = 0
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -86,25 +71,53 @@ def pedir_usuario():
                     if event.key == pygame.K_RETURN:
                         if usuario.strip():
                             jugador_id = guardar_usuario(usuario)
-                            usuario_actual = (jugador_id, usuario)  # ID + nombre
+                            usuario_actual = (jugador_id, usuario)
                             return usuario
                     elif event.key == pygame.K_BACKSPACE:
                         usuario = usuario[:-1]
                     else:
                         usuario += event.unicode
 
-        screen.fill((0, 0, 0))
+        # Fondo con degradado vertical
+        for i in range(ALTO):
+            color_fondo = (i * 255 // ALTO, 50, 100)
+            pygame.draw.line(screen, color_fondo, (0, i), (ANCHO, i))
 
         # Texto guía
-        label = font_label.render("Ingrese un usuario:", True, BLANCO)
-        screen.blit(label, (input_rect.x, input_rect.y - 30))  # 30 px arriba del input
+        label = font_label.render("Ingrese un usuario:", True, (255, 255, 255))
+        screen.blit(label, (input_rect.x, input_rect.y - 30))
 
         # Texto del usuario
         txt_surface = font.render(usuario, True, color)
         width = max(200, txt_surface.get_width() + 10)
         input_rect.w = width
         screen.blit(txt_surface, (input_rect.x + 5, input_rect.y + 5))
-        pygame.draw.rect(screen, color, input_rect, 2)
+
+        # Cursor parpadeante
+        if active and cursor_visible:
+            cursor = pygame.Rect(input_rect.x + 5 + txt_surface.get_width(), input_rect.y + 5, 3, input_rect.h - 10)
+            pygame.draw.rect(screen, color, cursor)
+
+        # Borde del input
+        pygame.draw.rect(screen, color, input_rect, 2, border_radius=5)
+
+        # Botón de confirmar
+        boton_rect = pygame.Rect(input_rect.x, input_rect.y + 70, 120, 40)
+        mouse_pos = pygame.mouse.get_pos()
+        if boton_rect.collidepoint(mouse_pos):
+            color_boton = (200, 200, 50)
+            if pygame.mouse.get_pressed()[0]:
+                if usuario.strip():
+                    jugador_id = guardar_usuario(usuario)
+                    usuario_actual = (jugador_id, usuario)
+                    return usuario
+        else:
+            color_boton = (255, 255, 255)
+
+        pygame.draw.rect(screen, color_boton, boton_rect, border_radius=10)
+        texto_boton = font.render("Confirmar", True, (0, 0, 0))
+        rect_texto = texto_boton.get_rect(center=boton_rect.center)
+        screen.blit(texto_boton, rect_texto)
 
         pygame.display.flip()
 
@@ -493,61 +506,179 @@ def mostrar_menu_inicio():
     ventana = pygame.display.set_mode((ANCHO, ALTO))
     pygame.display.set_caption("Menú Principal")
     clock = pygame.time.Clock()
-    fuente_titulo = pygame.font.Font(None, 72)
-    fuente_boton = pygame.font.Font(None, 36)
-    titulo = fuente_titulo.render("Defender la posición", True, BLANCO)
-    rect_titulo = titulo.get_rect(center=(ANCHO // 2, 150))
-    print("avance")
+
+    # 🎨 PALETA MILITAR COLORIDA
+    COLOR_FONDO1, COLOR_FONDO2 = (50, 90, 50), (180, 120, 60)  # verde -> marrón/naranja
+    COLOR_TITULO = (255, 215, 60)  # amarillo dorado
+    COLOR_BOTON, COLOR_BOTON_HOVER = (80, 160, 80), (255, 140, 50)  # verde -> naranja
+
+    fuente_titulo = pygame.font.Font(None, 96)
+    fuente_boton = pygame.font.Font(None, 42)
+
+    # Fondo con gradiente animado
+    def fondo_gradiente(superficie, color1, color2, frame):
+        for y in range(ALTO):
+            t = y / ALTO
+            r = int(color1[0] * (1 - t) + color2[0] * t + 30 * math.sin(frame * 0.02 + y * 0.015))
+            g = int(color1[1] * (1 - t) + color2[1] * t + 30 * math.sin(frame * 0.018 + y * 0.012))
+            b = int(color1[2] * (1 - t) + color2[2] * t + 20 * math.sin(frame * 0.02 + y * 0.018))
+            pygame.draw.line(superficie, (r % 256, g % 256, b % 256), (0, y), (ANCHO, y))
+
+    # Partículas coloridas (polvo/brillos)
+    class Particula:
+        def __init__(self):
+            self.x = random.randint(0, ANCHO)
+            self.y = random.randint(0, ALTO)
+            self.vel = random.uniform(0.3, 1)
+            self.size = random.randint(2, 5)
+            self.color = random.choice([
+                (255, 200, 50),  # amarillo
+                (255, 140, 50),  # naranja
+                (220, 80, 60)    # rojo suave
+            ])
+        def mover(self):
+            self.y += self.vel
+            if self.y > ALTO:
+                self.y = 0
+                self.x = random.randint(0, ANCHO)
+        def dibujar(self, surf):
+            pygame.draw.circle(surf, self.color, (int(self.x), int(self.y)), self.size)
+
+    particulas = [Particula() for _ in range(60)]
+    frame = 0
+
     while True:
         clock.tick(FPS)
-        ventana.fill((20, 20, 20))
+        frame += 1
+
+        # Fondo animado
+        fondo_gradiente(ventana, COLOR_FONDO1, COLOR_FONDO2, frame)
+
+        # Polvo flotando
+        for p in particulas:
+            p.mover()
+            p.dibujar(ventana)
+
+        # Efecto de brillo pulsante en el título
+        brillo = int(60 + 100 * math.sin(frame * 0.05))
+        titulo = fuente_titulo.render(
+            "DEFENDER LA POSICIÓN",
+            True,
+            (min(255, COLOR_TITULO[0] + brillo),
+             min(255, COLOR_TITULO[1] + brillo // 2),
+             min(255, COLOR_TITULO[2] + brillo // 3))
+        )
+        rect_titulo = titulo.get_rect(center=(ANCHO // 2, 150))
         ventana.blit(titulo, rect_titulo)
-        jugar = dibujar_boton("Jugar", ANCHO // 2 - 100, 300, 200, 50, fuente_boton, ventana)
-        opciones = dibujar_boton("Opciones", ANCHO // 2 - 100, 380, 200, 50, fuente_boton, ventana)
-        salir = dibujar_boton("Salir", ANCHO // 2 - 100, 460, 200, 50, fuente_boton, ventana)
+
+        # Botones con sombra
+        def boton_animado(texto, x, y, ancho, alto):
+            mouse = pygame.mouse.get_pos()
+            click = pygame.mouse.get_pressed()
+            rect_boton = pygame.Rect(x, y, ancho, alto)
+            hover = rect_boton.collidepoint(mouse)
+
+            sombra = rect_boton.move(4, 4)
+            pygame.draw.rect(ventana, (20, 20, 20), sombra, border_radius=10)
+
+            color = COLOR_BOTON_HOVER if hover else COLOR_BOTON
+            pygame.draw.rect(ventana, color, rect_boton, border_radius=10)
+
+            texto_render = fuente_boton.render(texto, True, BLANCO)
+            ventana.blit(texto_render, texto_render.get_rect(center=rect_boton.center))
+
+            if hover and click[0]:
+                pygame.time.wait(200)
+                return True
+            return False
+
+        # Botones principales
+        jugar = boton_animado("JUGAR", ANCHO // 2 - 100, 320, 200, 60)
+        opciones = boton_animado("OPCIONES", ANCHO // 2 - 100, 400, 200, 60)
+        salir = boton_animado("SALIR", ANCHO // 2 - 100, 480, 200, 60)
+
+        # Eventos
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+
+        # Acciones
         if jugar:
-            mostrar_menu_niveles()  # ← en vez de llamar a main() directamente
+            mostrar_menu_niveles()
+        elif opciones:
+            mostrar_menu_opciones()
         elif salir:
             pygame.quit()
             sys.exit()
-        elif opciones:
-              mostrar_menu_opciones()
-        
+
         pygame.display.flip()
+
+
+
 
 def mostrar_menu_niveles():
     pygame.init()
     ventana = pygame.display.set_mode((ANCHO, ALTO))
     pygame.display.set_caption("Seleccionar Nivel")
     clock = pygame.time.Clock()
-    bunker_rect = pygame.Rect(0, 0, 180, ALTO)
-
+    
     fuente_titulo = pygame.font.Font(None, 60)
     fuente_boton = pygame.font.Font(None, 36)
 
-    titulo = fuente_titulo.render("Selecciona un Nivel", True, BLANCO)
-    rect_titulo = titulo.get_rect(center=(ANCHO // 2, 150))
+    # Título con efecto de color cambiante
+    titulo_texto = "Selecciona un Nivel"
+    
+    botones = [
+        {"texto": "Nivel 1", "pos": (ANCHO//2 - 300, 300), "nivel": 1},
+        {"texto": "Nivel 2", "pos": (ANCHO//2 - 75, 300), "nivel": 2},
+        {"texto": "Nivel 3", "pos": (ANCHO//2 + 150, 300), "nivel": 3},
+        {"texto": "Volver", "pos": (ANCHO//2 - 75, 450), "nivel": None}
+    ]
+
+    color_hover = (200, 200, 50)
+    color_normal = (255, 255, 255)
+    
+    hue = 0  # Para el efecto de color del título
 
     while True:
         clock.tick(FPS)
-        ventana.fill((25, 25, 25))
+        ventana.fill((30, 30, 60))  # Fondo más vivo
+        
+        # Título con cambio de color suave
+        hue = (hue + 1) % 360
+        color_titulo = pygame.Color(0)
+        color_titulo.hsva = (hue, 100, 100, 100)
+        titulo = fuente_titulo.render(titulo_texto, True, color_titulo)
+        rect_titulo = titulo.get_rect(center=(ANCHO // 2, 150))
         ventana.blit(titulo, rect_titulo)
 
-        if dibujar_boton("Nivel 1", ANCHO//2 - 300, 300, 150, 50, fuente_boton, ventana):
-            main(nivel=1)
-            return
-        if dibujar_boton("Nivel 2", ANCHO//2 - 75, 300, 150, 50, fuente_boton, ventana):
-            main(nivel=2)
-            return
-        if dibujar_boton("Nivel 3", ANCHO//2 + 150, 300, 150, 50, fuente_boton, ventana):
-            main(nivel=3)
-            return
-        if dibujar_boton("Volver", ANCHO//2 - 75, 450, 150, 50, fuente_boton, ventana):
-            return
+        # Dibujar botones
+        mouse_pos = pygame.mouse.get_pos()
+        for boton in botones:
+            x, y = boton["pos"]
+            texto = boton["texto"]
+            ancho, alto = 150, 50
+            rect = pygame.Rect(x, y, ancho, alto)
+            
+            if rect.collidepoint(mouse_pos):
+                color_boton = color_hover
+            else:
+                color_boton = color_normal
+
+            pygame.draw.rect(ventana, color_boton, rect, border_radius=10)
+            texto_render = fuente_boton.render(texto, True, (0, 0, 0))
+            rect_texto = texto_render.get_rect(center=rect.center)
+            ventana.blit(texto_render, rect_texto)
+
+            # Detectar click
+            if pygame.mouse.get_pressed()[0] and rect.collidepoint(mouse_pos):
+                pygame.time.delay(150)  # Evita clicks múltiples
+                if boton["nivel"]:
+                    main(nivel=boton["nivel"])
+                    return
+                else:
+                    return
 
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
@@ -790,25 +921,54 @@ def mostrar_menu_opciones():
 def mostrar_menu_final(superficie, mensaje):
     fuente_grande = pygame.font.Font(None, 72)
     fuente_chica = pygame.font.Font(None, 36)
-    texto = fuente_grande.render(mensaje, True, BLANCO)
-    texto_rect = texto.get_rect(center=(ANCHO // 2, ALTO // 2 - 100))
-
     clock = pygame.time.Clock()
+
+    botones = [
+        {"texto": "Volver al Menú", "pos": (ANCHO // 2 - 250, ALTO // 2), "accion": mostrar_menu_inicio},
+        {"texto": "Reiniciar", "pos": (ANCHO // 2 - 100, ALTO // 2 + 100), "accion": lambda: main()},
+        {"texto": "Salir", "pos": (ANCHO // 2 + 50, ALTO // 2), "accion": lambda: pygame.quit() or sys.exit()},
+    ]
+
+    hue = 0  # Para animar el color del título
+    scale_factor = 1.0
+    scale_dir = 1
 
     while True:
         clock.tick(FPS)
-        superficie.fill(NEGRO)
-        superficie.blit(texto, texto_rect)
+        superficie.fill((10, 10, 30))  # Fondo oscuro
 
-        if dibujar_boton("Volver al Menú", ANCHO // 2 - 250, ALTO // 2, 200, 50, fuente_chica, superficie):
-            mostrar_menu_inicio()
-            return
-        if dibujar_boton("Reiniciar", ANCHO // 2 - 100, ALTO // 2 + 100, 200, 50, fuente_chica, superficie):
-            main()  # Reinicia el juego en nivel por defecto
-            return
-        if dibujar_boton("Salir", ANCHO // 2 + 50, ALTO // 2, 200, 50, fuente_chica, superficie):
-            pygame.quit()
-            sys.exit()
+        # Animación de color del título
+        hue = (hue + 1) % 360
+        color_titulo = pygame.Color(0)
+        color_titulo.hsva = (hue, 100, 100, 100)
+        texto = fuente_grande.render(mensaje, True, color_titulo)
+
+        # Animación de "zoom" del título
+        scale_factor += 0.005 * scale_dir
+        if scale_factor > 1.05 or scale_factor < 0.95:
+            scale_dir *= -1
+        texto_zoom = pygame.transform.rotozoom(texto, 0, scale_factor)
+        texto_rect = texto_zoom.get_rect(center=(ANCHO // 2, ALTO // 2 - 100))
+        superficie.blit(texto_zoom, texto_rect)
+
+        # Dibujar botones con efecto hover
+        mouse_pos = pygame.mouse.get_pos()
+        for boton in botones:
+            x, y = boton["pos"]
+            ancho, alto = 200, 50
+            rect = pygame.Rect(x, y, ancho, alto)
+            if rect.collidepoint(mouse_pos):
+                color_boton = (200, 200, 50)
+                if pygame.mouse.get_pressed()[0]:
+                    pygame.time.delay(150)
+                    boton["accion"]()
+            else:
+                color_boton = (255, 255, 255)
+
+            pygame.draw.rect(superficie, color_boton, rect, border_radius=10)
+            texto_boton = fuente_chica.render(boton["texto"], True, (0, 0, 0))
+            rect_texto = texto_boton.get_rect(center=rect.center)
+            superficie.blit(texto_boton, rect_texto)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
